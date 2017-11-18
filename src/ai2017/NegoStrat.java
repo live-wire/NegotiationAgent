@@ -6,8 +6,7 @@ import negotiator.bidding.BidDetails;
 import negotiator.boaframework.Actions;
 import negotiator.issue.Issue;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 import misc.Range;
@@ -16,6 +15,7 @@ public class NegoStrat {
 	private SessionInfo sessionInfo;
 	private double minTimeUtility = 0.7;  
 	private double minRandUtility = 0.7;
+	private double MIN_SELF_KALAI_UTILITY = 0.7;
 	private double cRate = 2;
 	private int tradeOffSearchRange = 5;
 	private int cnt = 0;
@@ -62,6 +62,58 @@ public class NegoStrat {
 		  double targetUtility = bidUtil(time, cFactor);
 		  BidDetails nextBid = sessionInfo.getOutcomeSpace().getBidNearUtility(targetUtility);
 		  return nextBid;
+	  }
+
+	  //Generating a bid based on opponent models
+	  public BidDetails kalaiOptimalBid(double alpha){
+		  double bestUtil = -1;
+		  List<BidDetails> allbids = sessionInfo.getOutcomeSpace().getAllOutcomes();
+		  HashMap<AgentID,OpponentModel> opponents =  sessionInfo.getOpponents();
+
+		  //Just Iterating over opponents and for each opponent finding the bid with the least utility
+		  Iterator it = opponents.entrySet().iterator();
+		  HashMap<BidDetails,Double> respectiveMinimumUtilities = new HashMap<BidDetails,Double>();
+		  while (it.hasNext()) {
+			  Map.Entry pair = (Map.Entry)it.next();
+			  double minOpponentUtility = Double.MAX_VALUE;
+			  BidDetails minOpponentBid = allbids.get(0);
+
+			  //Since allbids are sorted based on our agent's utility, let's just multiply the utility of the opponents in each iteration by
+			  //say 1.001 since we're minimizing first
+			  alpha = 1;
+			  for (BidDetails bid:allbids){
+
+
+			  	double selfutility = sessionInfo.getUtilitySpace().getUtility(bid.getBid());
+
+
+				double utilbid =   ((OpponentModel)pair.getValue()).getOpponentUtility(bid.getBid());
+				utilbid = utilbid * alpha;
+
+				if(utilbid<minOpponentUtility)
+				{
+					minOpponentBid = bid;
+					minOpponentUtility = utilbid;
+				}
+				if(selfutility<MIN_SELF_KALAI_UTILITY)
+					break;
+
+			  }
+			  respectiveMinimumUtilities.put(minOpponentBid,minOpponentUtility);
+		  }
+		  //Now get maximum bid utility of the minimums
+		  Iterator it2 = respectiveMinimumUtilities.entrySet().iterator();
+		  BidDetails bidFinal = null;
+		  double utilMax = Double.MIN_VALUE;
+		  while (it.hasNext()) {
+			  Map.Entry pair = (Map.Entry) it2.next();
+			  if(((double)pair.getValue())>utilMax)
+			  {
+			  	utilMax = (double)pair.getValue();
+			  	bidFinal = (BidDetails) pair.getKey();
+			  }
+		  }
+		  return bidFinal;
 	  }
 	  
 	  

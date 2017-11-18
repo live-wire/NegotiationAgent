@@ -1,6 +1,5 @@
 package ai2017;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import negotiator.AgentID;
@@ -31,6 +30,7 @@ public class Group19 extends AbstractNegotiationParty {
 	private SortedOutcomeSpace sortedOutcome;
 	private SessionInfo sessionInfo;
 	private NegoStrat negoStrat;
+	private int cnt = 0;
 	
 	@Override
 	public void init(NegotiationInfo info) {
@@ -57,18 +57,26 @@ public class Group19 extends AbstractNegotiationParty {
 			return new Offer(getPartyId(), nextBid.getBid());
 		}
 		else {
-			double prevMaxUtil = 0;
-			nextBid = negoStrat.determineNextBid(lastSender);
-			if(nextBid.getMyUndiscountedUtil() < prevMaxUtil) {
-				
+			//double prevMaxUtil = 0; //if(nextBid.getMyUndiscountedUtil() < prevMaxUtil)
+			//determine next bid
+			AgentID nextAgent = null;
+			int nextOrderIdx = (sessionInfo.getOpponents().get(lastSender).getOrder() == sessionInfo.getOpponents().size()-1)? 
+					0:sessionInfo.getOpponents().get(lastSender).getOrder()+1;
+			for (AgentID agent:sessionInfo.getOpponents().keySet()) {
+				if(sessionInfo.getOpponents().get(agent).getOrder() == nextOrderIdx) {
+					nextAgent = agent;
+					break;
+				}
 			}
-			sessionInfo.getMyBidHistory().add(nextBid);
+			nextBid = negoStrat.determineNextBid(lastSender, nextAgent); 
+			
 			if(lastReceivedBid != null && 
-					(negoStrat.myAcceptanceStrategy(lastReceivedBid) == Actions.Accept)) {
+					(negoStrat.myAcceptanceStrategy(lastReceivedBid, nextBid) == Actions.Accept)) {
 				return new Accept(getPartyId(), lastReceivedBid);
 			} 
 			else {
-				return new Offer(getPartyId(), nextBid.getBid());
+				sessionInfo.getMyBidHistory().add(nextBid);
+				return new Offer(getPartyId(), nextBid.getBid());	
 			}
 		}
 	}
@@ -93,25 +101,29 @@ public class Group19 extends AbstractNegotiationParty {
 		if(sender == null)
 			return;
 		
-		
-		boolean exist = false;
-		//create or update opponent model
-		for(int i=0; i < sessionInfo.getOpponentList().size(); i++) {
-			if(sessionInfo.getOpponentList().get(i).getAgentID().equals(sender)) {
-				exist = true;
-				if (action instanceof Offer || action instanceof Accept) {
-					sessionInfo.getOpponentList().get(i).addBidToHistory(lastReceivedBid);
-					sessionInfo.getOpponentList().get(i).updateModel();
-				}
-			}	
-		}
-		if(!exist) {
+		if(!sessionInfo.getOpponents().containsKey(sender)) {
 			OpponentModel o = new OpponentModel(sessionInfo,sender);
-			if (action instanceof Offer || action instanceof Accept) {
+			if (action instanceof Offer) {
 				o.addBidToHistory(lastReceivedBid);
 			}
-			sessionInfo.getOpponentList().add(o);
+			else if(action instanceof Accept) {
+				o.addAcceptedBid(lastReceivedBid);	
+			}
+			o.setOrder(cnt);
+			sessionInfo.getOpponents().put(sender, o);
+			cnt += 1;
 		}
+		else {
+			if (action instanceof Offer) {
+				sessionInfo.getOpponents().get(sender).addBidToHistory(lastReceivedBid);
+				if(sessionInfo.getOpponents().get(sender).getBidHistory().size() <= 100){
+				    sessionInfo.getOpponents().get(sender).updateModel();
+				}
+			}
+			else if(action instanceof Accept) {
+				sessionInfo.getOpponents().get(sender).addAcceptedBid(lastReceivedBid);	
+			}
+		}	
 	}
 
 	@Override

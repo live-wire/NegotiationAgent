@@ -11,6 +11,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import misc.Range;
 
+import javax.print.attribute.standard.MediaSize;
+
 public class NegoStrat {
 	private SessionInfo sessionInfo;
 	private double minTimeUtility = 0.7;  
@@ -66,6 +68,12 @@ public class NegoStrat {
 
 	  //Generating a bid based on opponent models
 	  public BidDetails kalaiOptimalBid(double alpha){
+
+
+		  boolean NASH = false;
+
+
+
 		  double bestUtil = -1;
 		  List<BidDetails> allbids = sessionInfo.getOutcomeSpace().getAllOutcomes();
 		  HashMap<AgentID,OpponentModel> opponents =  sessionInfo.getOpponents();
@@ -73,6 +81,9 @@ public class NegoStrat {
 		  //Just Iterating over opponents and for each opponent finding the bid with the least utility
 		  Iterator it = opponents.entrySet().iterator();
 		  HashMap<BidDetails,Double> respectiveMinimumUtilities = new HashMap<BidDetails,Double>();
+
+		  double maxproduct = Double.MIN_VALUE;
+		  BidDetails nashBid = null;
 		  while (it.hasNext()) {
 			  Map.Entry pair = (Map.Entry)it.next();
 			  double minOpponentUtility = Double.MAX_VALUE;
@@ -81,6 +92,7 @@ public class NegoStrat {
 			  //Since allbids are sorted based on our agent's utility, let's just multiply the utility of the opponents in each iteration by
 			  //say 1.001 since we're minimizing first
 			  alpha = 1;
+
 			  for (BidDetails bid:allbids){
 
 
@@ -98,6 +110,19 @@ public class NegoStrat {
 				if(selfutility<MIN_SELF_KALAI_UTILITY)
 					break;
 
+				//Trying to calculate the Nash Equilibrium here:
+				double product = selfutility;
+				Iterator inneriterator = opponents.entrySet().iterator();
+				  while (inneriterator.hasNext()) {
+					  Map.Entry innerpair = (Map.Entry)inneriterator.next();
+					  product = product * (double)innerpair.getValue();
+				  }
+				 if(product > maxproduct)
+				 {
+				 	maxproduct = product;
+				 	nashBid = bid;
+				 }
+
 			  }
 			  respectiveMinimumUtilities.put(minOpponentBid,minOpponentUtility);
 		  }
@@ -105,7 +130,7 @@ public class NegoStrat {
 		  Iterator it2 = respectiveMinimumUtilities.entrySet().iterator();
 		  BidDetails bidFinal = null;
 		  double utilMax = Double.MIN_VALUE;
-		  while (it.hasNext()) {
+		  while (it2.hasNext()) {
 			  Map.Entry pair = (Map.Entry) it2.next();
 			  if(((double)pair.getValue())>utilMax)
 			  {
@@ -113,6 +138,12 @@ public class NegoStrat {
 			  	bidFinal = (BidDetails) pair.getKey();
 			  }
 		  }
+
+		  if(nashBid!=null && NASH && (sessionInfo.getUtilitySpace().getUtility(nashBid.getBid()) > sessionInfo.getUtilitySpace().getUtility(bidFinal.getBid())))
+		  {
+			  return nashBid;
+		  }
+		  //This will have a self utility of atleast MIN_SELF_KALAI_UTILITY and should be almost accepted by most parties
 		  return bidFinal;
 	  }
 	  
